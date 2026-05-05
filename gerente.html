@@ -575,6 +575,7 @@
 
 <script>
 // ─── CONFIG ───────────────────────────────────────────
+// ⚠️ SUBSTITUA pela URL gerada no Google Apps Script após implantar
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQXz-Ge2STroyY5yw17e8oR3ljExMpQevdKU0SUTLPCX59yoNh45WR5vNm_p2Kyz6pjQ/exec';
 
 let allVisitas = [];
@@ -582,21 +583,6 @@ let filteredVisitas = [];
 let allVendedores = [];
 let sortField = 'data';
 let sortDir = -1;
-
-// ─── DEMO DATA ────────────────────────────────────────
-const demoData = {
-  visitas: [
-    {data:'2025-05-01',vendedor:'João Silva',cliente:'Supermercado Boa Compra',status:'Recebido',emissoras:'TV Cidade Record, AGORA FM',produto:'Spot 30s',relatorio:'Cliente muito receptivo, interessado em campanha de fim de ano.'},
-    {data:'2025-05-02',vendedor:'Maria Santos',cliente:'Farmácia São João',status:'Remarcou',emissoras:'Jovem Pan',produto:'Patrocínio',relatorio:'Gerente não estava, remarcado para quinta.'},
-    {data:'2025-05-02',vendedor:'Carlos Pereira',cliente:'Concessionária AutoMax',status:'Recebido',emissoras:'TV Cidade Record',produto:'VT 60s',relatorio:'Apresentamos o pacote platinum. Cliente pediu proposta formal.'},
-    {data:'2025-05-03',vendedor:'João Silva',cliente:'Restaurante Sabor & Arte',status:'Recebido',emissoras:'AGORA FM',produto:'Spot 15s',relatorio:'Fechado! Assinatura prevista para próxima semana.'},
-    {data:'2025-05-03',vendedor:'Maria Santos',cliente:'Loja MegaMóveis',status:'Remarcou',emissoras:'AGORA MT',produto:'Anúncio Digital',relatorio:'Dono estava ocupado. Retornar segunda.'},
-    {data:'2025-05-04',vendedor:'Carlos Pereira',cliente:'Clínica OdontoPlus',status:'Recebido',emissoras:'Jovem Pan, AGORA FM',produto:'Nota Patrocinada',relatorio:'Excelente reunião. Proposta enviada por email.'},
-    {data:'2025-05-05',vendedor:'João Silva',cliente:'Academia FitBody',status:'Recebido',emissoras:'AGORA FM',produto:'Spot 30s',relatorio:'Renovação de contrato com aumento de grade.'},
-    {data:'2025-05-05',vendedor:'Maria Santos',cliente:'Hotel Mato Grosso Palace',status:'Recebido',emissoras:'TV Cidade Record, Jovem Pan',produto:'Pacote Combo',relatorio:'Grande cliente! Interesse em múltiplas emissoras.'},
-  ],
-  vendedores: ['João Silva','Maria Santos','Carlos Pereira']
-};
 
 // ─── NAVIGATION ───────────────────────────────────────
 function showPanel(id) {
@@ -619,16 +605,63 @@ function closeSidebar() {
 }
 
 // ─── LOAD DATA ────────────────────────────────────────
+function showBanner(msg, tipo) {
+  let banner = document.getElementById('config-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'config-banner';
+    banner.style.cssText = `
+      position:fixed; top:0; left:0; right:0; z-index:9999;
+      padding:12px 20px; font-size:0.82rem; font-weight:600;
+      display:flex; align-items:center; justify-content:center; gap:10px;
+    `;
+    document.body.prepend(banner);
+  }
+  if (tipo === 'erro') {
+    banner.style.background = '#7f0000';
+    banner.style.color = '#ffcccc';
+    banner.style.borderBottom = '1px solid #cc0000';
+  } else {
+    banner.style.background = '#14532d';
+    banner.style.color = '#bbf7d0';
+    banner.style.borderBottom = '1px solid #22c55e';
+  }
+  banner.innerHTML = msg;
+}
+
+function hideBanner() {
+  const b = document.getElementById('config-banner');
+  if (b) b.remove();
+}
+
 async function loadData() {
+  if (SCRIPT_URL.includes('SEU_SCRIPT_ID')) {
+    showBanner('⚠️ Configure a URL do Google Apps Script no arquivo gerente.html antes de usar o sistema.', 'erro');
+    allVisitas = [];
+    allVendedores = [];
+    filteredVisitas = [];
+    renderDashboard();
+    renderVisitas();
+    renderVendedoresList();
+    renderRelatorios();
+    populateFilters();
+    return;
+  }
+
   try {
     const r = await fetch(`${SCRIPT_URL}?action=getAll`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
-    allVisitas = data.visitas || [];
+    if (!data.success) throw new Error(data.error || 'Erro desconhecido');
+    allVisitas    = data.visitas    || [];
     allVendedores = data.vendedores || [];
+    hideBanner();
   } catch(e) {
-    allVisitas = demoData.visitas;
-    allVendedores = demoData.vendedores;
+    showBanner(`❌ Não foi possível conectar ao servidor. Verifique a URL do Apps Script. (${e.message})`, 'erro');
+    allVisitas    = [];
+    allVendedores = [];
   }
+
   filteredVisitas = [...allVisitas];
   renderDashboard();
   renderVisitas();
@@ -780,28 +813,59 @@ function sortBy(field) {
 
 // ─── VENDEDORES ───────────────────────────────────────
 async function cadastrarVendedor() {
-  const nome = document.getElementById('cad-nome').value.trim();
+  const nome  = document.getElementById('cad-nome').value.trim();
   const senha = document.getElementById('cad-senha').value;
   const senha2 = document.getElementById('cad-senha2').value;
   const errEl = document.getElementById('cad-error');
-  const okEl = document.getElementById('cad-success');
-  errEl.style.display='none'; okEl.style.display='none';
+  const okEl  = document.getElementById('cad-success');
+  errEl.style.display = 'none';
+  okEl.style.display  = 'none';
 
-  if (!nome||!senha) { errEl.textContent='Nome e senha são obrigatórios.'; errEl.style.display='block'; return; }
-  if (senha !== senha2) { errEl.textContent='As senhas não coincidem.'; errEl.style.display='block'; return; }
-  if (allVendedores.includes(nome)) { errEl.textContent='Vendedor já cadastrado.'; errEl.style.display='block'; return; }
+  if (!nome || !senha) { errEl.textContent = 'Nome e senha são obrigatórios.'; errEl.style.display = 'block'; return; }
+  if (senha !== senha2) { errEl.textContent = 'As senhas não coincidem.'; errEl.style.display = 'block'; return; }
+  if (allVendedores.map(v=>v.toLowerCase()).includes(nome.toLowerCase())) {
+    errEl.textContent = 'Já existe um vendedor com esse nome.'; errEl.style.display = 'block'; return;
+  }
+
+  const btn = document.querySelector('#panel-vendedores .btn-full');
+  btn.disabled = true; btn.textContent = 'SALVANDO...';
 
   try {
-    await fetch(SCRIPT_URL, {method:'POST', body:JSON.stringify({action:'addVendedor',nome,senha})});
-  } catch(e) { console.log('Demo: vendor added locally'); }
+    const r = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'addVendedor', nome, senha })
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Erro ao salvar');
 
-  allVendedores.push(nome);
-  document.getElementById('cad-nome').value='';
-  document.getElementById('cad-senha').value='';
-  document.getElementById('cad-senha2').value='';
-  okEl.textContent = `✅ ${nome} cadastrado com sucesso!`; okEl.style.display='block';
-  renderVendedoresList();
-  populateFilters();
+    document.getElementById('cad-nome').value  = '';
+    document.getElementById('cad-senha').value = '';
+    document.getElementById('cad-senha2').value = '';
+    okEl.textContent = `✅ ${nome} cadastrado com sucesso!`;
+    okEl.style.display = 'block';
+
+    // Recarrega a lista do servidor para garantir sincronismo
+    await reloadVendedores();
+  } catch(e) {
+    errEl.textContent = `Erro: ${e.message}`;
+    errEl.style.display = 'block';
+  }
+
+  btn.disabled = false; btn.textContent = 'CADASTRAR VENDEDOR';
+}
+
+async function reloadVendedores() {
+  try {
+    const r = await fetch(`${SCRIPT_URL}?action=getVendedores`);
+    const data = await r.json();
+    if (data.success) {
+      allVendedores = data.vendedores || [];
+      renderVendedoresList();
+      populateFilters();
+    }
+  } catch(e) {
+    console.error('Erro ao recarregar vendedores:', e);
+  }
 }
 
 function renderVendedoresList() {
@@ -827,13 +891,21 @@ function renderVendedoresList() {
 }
 
 async function deleteVendedor(nome) {
-  if (!confirm(`Remover ${nome}?`)) return;
+  if (!confirm(`Remover "${nome}" do sistema?\nAs visitas registradas por ele serão mantidas.`)) return;
+
   try {
-    await fetch(SCRIPT_URL, {method:'POST', body:JSON.stringify({action:'deleteVendedor',nome})});
-  } catch(e) {}
-  allVendedores = allVendedores.filter(v=>v!==nome);
-  renderVendedoresList();
-  populateFilters();
+    const r = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'deleteVendedor', nome })
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Erro ao remover');
+
+    // Recarrega do servidor para garantir que sumiu de verdade
+    await reloadVendedores();
+  } catch(e) {
+    alert(`Erro ao remover vendedor: ${e.message}`);
+  }
 }
 
 // ─── RELATÓRIOS ───────────────────────────────────────
