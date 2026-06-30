@@ -175,6 +175,21 @@
 
   .visita-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 12px; transition: border-color .2s; }
   .visita-card:hover { border-color: rgba(204,0,0,0.3); }
+
+  .mes-header {
+    display: flex; align-items: center; gap: 10px;
+    margin: 22px 0 12px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .mes-header:first-child { margin-top: 0; }
+  .mes-header h4 {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1rem; letter-spacing: 2px;
+    color: var(--muted2); text-transform: uppercase; white-space: nowrap;
+  }
+  .mes-count {
+    font-size: 0.7rem; color: var(--muted); background: rgba(255,255,255,0.05);
+    border-radius: 20px; padding: 2px 9px; flex-shrink: 0;
+  }
   .visita-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
   .visita-cliente { font-size: 1rem; font-weight: 700; color: var(--text); }
   .visita-data { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
@@ -498,11 +513,22 @@ function irParaHistorico() {
 
 function formatarData(str) {
   if (!str) return '—';
+  const m = String(str).match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+  if (m) return `${m[1]}/${m[2]}/${m[3]} às ${m[4]}:${m[5]}`;
   try {
     const d = new Date(str);
     if (isNaN(d)) return str;
     return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   } catch(e) { return str; }
+}
+
+function nomeMes(str) {
+  if (!str) return 'Sem data';
+  const m = String(str).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return 'Sem data';
+  const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const mesNome = meses[parseInt(m[2], 10) - 1] || '';
+  return mesNome.charAt(0).toUpperCase() + mesNome.slice(1) + ' de ' + m[3];
 }
 
 async function carregarHistorico() {
@@ -535,7 +561,19 @@ async function carregarHistorico() {
       return;
     }
 
-    body.innerHTML = visitas.map(v => `
+    // Agrupa mantendo a ordem que já vem do backend (por cadastro, mais recente primeiro)
+    let html = '';
+    let mesAtual = null;
+    let contagemMes = 0;
+
+    visitas.forEach((v, idx) => {
+      const mes = nomeMes(v.data);
+      if (mes !== mesAtual) {
+        contagemMes = visitas.filter(x => nomeMes(x.data) === mes).length;
+        html += `<div class="mes-header"><h4>${mes}</h4><span class="mes-count">${contagemMes} visita${contagemMes !== 1 ? 's' : ''}</span></div>`;
+        mesAtual = mes;
+      }
+      html += `
       <div class="visita-card">
         <div class="visita-card-top">
           <div>
@@ -553,7 +591,10 @@ async function carregarHistorico() {
         ${v.relatorio
           ? `<div class="visita-relatorio">${v.relatorio}</div>`
           : `<div class="visita-relatorio vazio">Sem relatório preenchido.</div>`}
-      </div>`).join('');
+      </div>`;
+    });
+
+    body.innerHTML = html;
 
   } catch (e) {
     body.innerHTML = `
